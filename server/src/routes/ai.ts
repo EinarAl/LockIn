@@ -1,10 +1,18 @@
 import { Router, Response } from 'express'
 import multer from 'multer'
+import path from 'path'
 import { authenticate, AuthRequest } from '../middleware/auth'
 import { AIService } from '../services/ai'
 import { OCRService } from '../services/ocr'
 
-const upload = multer({ dest: 'uploads/' })
+const storage = multer.diskStorage({
+  destination: 'uploads/',
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname)
+    cb(null, Date.now() + '-' + Math.round(Math.random() * 1e9) + ext)
+  },
+})
+const upload = multer({ storage })
 const router = Router()
 
 router.use(authenticate)

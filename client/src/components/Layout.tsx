@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/auth'
 const navLinks = [
   { to: '/', label: 'Dashboard' },
   { to: '/ai-chat', label: 'AI Tutor' },
+  { to: '/quiz', label: 'Quiz' },
   { to: '/mock-midterm', label: 'Mock Midterm' },
   { to: '/mock-interviews', label: 'Interviews' },
   { to: '/settings', label: 'Settings' },
