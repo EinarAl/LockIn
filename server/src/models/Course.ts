@@ -4,6 +4,7 @@ const eventSchema = new mongoose.Schema({
   date: { type: String, required: true },
   title: { type: String, required: true },
   type: { type: String, enum: ['exam', 'quiz', 'assignment', 'project', 'other'], default: 'other' },
+  color: { type: String, default: '#3b82f6' },
 })
 
 const gradeCategorySchema = new mongoose.Schema({

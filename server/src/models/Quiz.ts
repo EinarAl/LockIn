@@ -1,10 +1,12 @@
 import mongoose from 'mongoose'
 
 const questionSchema = new mongoose.Schema({
-  question: { type: String, required: true },
+  prompt: { type: String, required: true },
   options: [String],
   correctAnswer: { type: String, required: true },
-  type: { type: String, enum: ['multiple-choice', 'true-false', 'short-answer'], default: 'multiple-choice' },
+  type: { type: String, enum: ['multiple-choice', 'true-false', 'short-answer', 'word-problem'], default: 'multiple-choice' },
+  explanation: String,
+  points: { type: Number, default: 1 },
 })
 
 const quizSchema = new mongoose.Schema({

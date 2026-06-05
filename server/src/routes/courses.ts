@@ -1,4 +1,4 @@
-import { Router, Response } from 'express'
+import { Router, Response, NextFunction } from 'express'
 import multer from 'multer'
 import path from 'path'
 import { authenticate, AuthRequest } from '../middleware/auth'
@@ -17,6 +17,12 @@ const upload = multer({ storage })
 const router = Router()
 
 router.use(authenticate)
+
+function asyncHandler(fn: (req: AuthRequest, res: Response, next: NextFunction) => Promise<any>) {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    fn(req, res, next).catch(next)
+  }
+}
 
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {
@@ -56,50 +62,44 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
   res.json({ message: 'Course deleted' })
 })
 
-router.post('/:id/upload-syllabus', upload.single('file'), async (req: AuthRequest, res: Response) => {
-  try {
-    const course = await Course.findOne({ _id: req.params.id, user: req.userId })
-    if (!course) return res.status(404).json({ error: 'Course not found' })
+router.post('/:id/upload-syllabus', upload.single('file'), asyncHandler(async (req: AuthRequest, res: Response) => {
+  const course = await Course.findOne({ _id: req.params.id, user: req.userId })
+  if (!course) return res.status(404).json({ error: 'Course not found' })
 
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
 
-    const text = await OCRService.processFile(req.file.path)
-    course.rawSyllabusText = text
-    await course.save()
+  const text = await OCRService.processFile(req.file.path)
+  course.rawSyllabusText = text
+  await course.save()
 
-    res.json({ message: 'Syllabus uploaded', textLength: text.length })
-  } catch (err) {
-    console.error('/upload-syllabus error:', err)
-    res.status(500).json({ error: 'Failed to process syllabus' })
+  res.json({ message: 'Syllabus uploaded', textLength: text.length, text: text.slice(0, 500) })
+}))
+
+router.post('/:id/parse-syllabus', asyncHandler(async (req: AuthRequest, res: Response) => {
+  const course = await Course.findOne({ _id: req.params.id, user: req.userId })
+  if (!course) return res.status(404).json({ error: 'Course not found' })
+  if (!course.rawSyllabusText) return res.status(400).json({ error: 'No syllabus text. Upload a syllabus first.' })
+
+  const parsed = await generateCalendarEvents(course.rawSyllabusText, course.name)
+
+  if (!parsed.events || parsed.events.length === 0) {
+    return res.json({ events: course.events, gradeCategories: course.gradeCategories, warning: 'AI found no events in this syllabus. The text may not contain dates or the format may be unusual.' })
   }
-})
 
-router.post('/:id/parse-syllabus', async (req: AuthRequest, res: Response) => {
-  try {
-    const course = await Course.findOne({ _id: req.params.id, user: req.userId })
-    if (!course) return res.status(404).json({ error: 'Course not found' })
-    if (!course.rawSyllabusText) return res.status(400).json({ error: 'No syllabus text. Upload a syllabus first.' })
-
-    const parsed = await generateCalendarEvents(course.rawSyllabusText, course.name)
-
-    if (parsed.events) {
-      for (const e of parsed.events) {
-        (course.events as any).push({ date: e.date, title: e.title, type: e.type || 'other' })
-      }
-    }
-    if (parsed.gradeCategories) {
-      for (const g of parsed.gradeCategories) {
-        (course.gradeCategories as any).push({ name: g.name, weight: g.weight })
-      }
-    }
-
-    await course.save()
-    res.json({ events: course.events, gradeCategories: course.gradeCategories })
-  } catch (err) {
-    console.error('/parse-syllabus error:', err)
-    res.status(500).json({ error: 'Failed to parse syllabus' })
+  course.events = [] as any
+  for (const e of parsed.events) {
+    (course.events as any).push({ date: e.date, title: e.title, type: e.type || 'other', color: '#3b82f6' })
   }
-})
+  if (parsed.gradeCategories) {
+    course.gradeCategories = [] as any
+    for (const g of parsed.gradeCategories) {
+      (course.gradeCategories as any).push({ name: g.name, weight: g.weight })
+    }
+  }
+
+  await course.save()
+  res.json({ events: course.events, gradeCategories: course.gradeCategories })
+}))
 
 router.post('/:id/events', async (req: AuthRequest, res: Response) => {
   try {
