@@ -55,9 +55,14 @@ router.post('/login', async (req: AuthRequest, res: Response) => {
 })
 
 router.get('/me', authenticate, async (req: AuthRequest, res: Response) => {
-  const user = await User.findById(req.userId).select('-password')
-  if (!user) return res.status(404).json({ error: 'User not found' })
-  res.json({ user: { id: user._id.toString(), email: user.email, name: user.name } })
+  try {
+    const user = await User.findById(req.userId).select('-password')
+    if (!user) return res.status(404).json({ error: 'User not found' })
+    res.json({ user: { id: user._id.toString(), email: user.email, name: user.name } })
+  } catch (err) {
+    console.error('/auth/me error:', err)
+    res.status(500).json({ error: 'Failed to get user' })
+  }
 })
 
 export default router

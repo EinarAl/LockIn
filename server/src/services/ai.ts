@@ -21,6 +21,13 @@ export async function callGroq(model: string, messages: { role: string; content:
 
   if (!res.ok) {
     const errText = await res.text();
+    if (res.status === 429) {
+      return JSON.stringify({
+        error: 'Rate limit reached. The AI is processing too many requests. Please wait a moment and try again.',
+        fallback: true,
+        rateLimited: true,
+      });
+    }
     throw new Error(`Groq API error (${res.status}): ${errText}`);
   }
 

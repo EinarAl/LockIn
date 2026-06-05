@@ -56,6 +56,7 @@ router.post('/quiz/generate', upload.single('exampleExam'), async (req: AuthRequ
 
     res.status(201).json(quiz)
   } catch (err) {
+    console.error('/quiz/generate error:', err)
     res.status(500).json({ error: 'Failed to generate quiz' })
   }
 })
@@ -76,6 +77,7 @@ router.post('/quiz/:quizId/answer', async (req: AuthRequest, res: Response) => {
 
     res.json({ score, total: quiz.questions.length, results })
   } catch (err) {
+    console.error('/quiz/answer error:', err)
     res.status(500).json({ error: 'Failed to grade quiz' })
   }
 })

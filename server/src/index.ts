@@ -23,6 +23,15 @@ app.use('/api/grades', gradeRoutes)
 app.use('/api/study', studyRoutes)
 app.use('/api/ai', aiRoutes)
 
+app.use((err: any, _req: any, res: any, _next: any) => {
+  console.error('Unhandled error:', err)
+  res.status(500).json({ error: 'Internal server error' })
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason)
+})
+
 mongoose.connect(config.mongoUri)
   .then(() => {
     console.log('Connected to MongoDB')

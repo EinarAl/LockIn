@@ -24,6 +24,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     const course = await Course.create({ user: req.userId, name, code, term, instructor })
     res.status(201).json(course)
   } catch (err) {
+    console.error('Create course error:', err)
     res.status(500).json({ error: 'Failed to create course' })
   }
 })
@@ -68,6 +69,7 @@ router.post('/:id/upload-syllabus', upload.single('file'), async (req: AuthReque
 
     res.json({ message: 'Syllabus uploaded', textLength: text.length })
   } catch (err) {
+    console.error('/upload-syllabus error:', err)
     res.status(500).json({ error: 'Failed to process syllabus' })
   }
 })
@@ -94,6 +96,7 @@ router.post('/:id/parse-syllabus', async (req: AuthRequest, res: Response) => {
     await course.save()
     res.json({ events: course.events, gradeCategories: course.gradeCategories })
   } catch (err) {
+    console.error('/parse-syllabus error:', err)
     res.status(500).json({ error: 'Failed to parse syllabus' })
   }
 })

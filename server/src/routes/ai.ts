@@ -34,6 +34,7 @@ router.post('/solve', upload.single('image'), async (req: AuthRequest, res: Resp
     const result = await AIService.solveProblem(fullPrompt, 'code', language || 'Python')
     res.json(result)
   } catch (err) {
+    console.error('/ai/solve error:', err)
     res.status(500).json({ error: 'Failed to solve problem' })
   }
 })
@@ -54,6 +55,7 @@ router.post('/generate-exam', upload.single('exampleExam'), async (req: AuthRequ
     const result = await AIService.generateQuiz(context, 'exam', language || 'Python')
     res.json(result)
   } catch (err) {
+    console.error('/ai/generate-exam error:', err)
     res.status(500).json({ error: 'Failed to generate exam' })
   }
 })
@@ -64,6 +66,7 @@ router.post('/interview-challenges', async (req: AuthRequest, res: Response) => 
     const result = await AIService.generateInterviewChallenges({ topic, position, syllabusText, language: language || 'Python' })
     res.json(result)
   } catch (err) {
+    console.error('/ai/interview-challenges error:', err)
     res.status(500).json({ error: 'Failed to generate challenges' })
   }
 })
@@ -74,6 +77,7 @@ router.post('/interview-challenge', async (req: AuthRequest, res: Response) => {
     const result = await AIService.getInterviewChallenge({ title, language: language || 'Python', position, topic })
     res.json(result)
   } catch (err) {
+    console.error('/ai/interview-challenge error:', err)
     res.status(500).json({ error: 'Failed to get challenge' })
   }
 })
@@ -84,6 +88,7 @@ router.post('/evaluate-answer', async (req: AuthRequest, res: Response) => {
     const result = await AIService.evaluateInterviewAnswer({ problemTitle, problemDescription, userAnswer, language: language || 'Python' })
     res.json(result)
   } catch (err) {
+    console.error('/ai/evaluate-answer error:', err)
     res.status(500).json({ error: 'Failed to evaluate answer' })
   }
 })

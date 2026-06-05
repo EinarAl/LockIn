@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import Tesseract from 'tesseract.js';
-import { PDFParse } from 'pdf-parse';
+import pdf from 'pdf-parse';
 
 export class OCRService {
   static async processFile(filePath: string): Promise<string> {
@@ -28,12 +28,7 @@ export class OCRService {
 
   private static async processPDF(filePath: string): Promise<string> {
     const pdfBuffer = fs.readFileSync(filePath);
-    const parser = new PDFParse({ data: pdfBuffer });
-    try {
-      const result = await parser.getText();
-      return result.text?.trim() || '[No text extracted from PDF]';
-    } finally {
-      await parser.destroy().catch(() => {});
-    }
+    const data = await pdf(pdfBuffer);
+    return data.text?.trim() || '[No text extracted from PDF]';
   }
 }
