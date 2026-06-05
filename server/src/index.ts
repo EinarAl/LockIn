@@ -6,6 +6,7 @@ import authRoutes from './routes/auth'
 import courseRoutes from './routes/courses'
 import gradeRoutes from './routes/grades'
 import studyRoutes from './routes/study'
+import aiRoutes from './routes/ai'
 
 const app = express()
 
@@ -20,6 +21,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/courses', courseRoutes)
 app.use('/api/grades', gradeRoutes)
 app.use('/api/study', studyRoutes)
+app.use('/api/ai', aiRoutes)
 
 mongoose.connect(config.mongoUri)
   .then(() => {

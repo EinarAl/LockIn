@@ -18,7 +18,7 @@ router.get('/quiz/:courseId', async (req: AuthRequest, res: Response) => {
 
 router.post('/quiz/generate', async (req: AuthRequest, res: Response) => {
   try {
-    const { courseId, topic, type } = req.body
+    const { courseId, topic, type, language } = req.body
     let context = topic || ''
 
     if (courseId) {
@@ -28,7 +28,7 @@ router.post('/quiz/generate', async (req: AuthRequest, res: Response) => {
       }
     }
 
-    const quizData = await AIService.generateQuiz(context, type || 'quiz')
+    const quizData = await AIService.generateQuiz(context, type || 'quiz', language)
     const quiz = await Quiz.create({
       user: req.userId,
       course: courseId,

@@ -3,3 +3,4 @@ body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background:
 a { color: #3b82f6; }
 input { border: 1px solid #d1d5db; border-radius: 6; }
 input:focus { outline: none; border-color: #3b82f6; }
+@keyframes spin { to { transform: rotate(360deg); } }

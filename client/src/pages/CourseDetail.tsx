@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import api from '../api'
+import Spinner from '../components/Spinner'
+import LanguageSelector from '../components/LanguageSelector'
 
 interface Course { _id: string; name: string; code: string; term: string; instructor: string; events: any[]; gradeCategories: any[]; rawSyllabusText: string }
 
@@ -13,6 +15,10 @@ export default function CourseDetail() {
   const [quizTopic, setQuizTopic] = useState('')
   const [generatedQuiz, setGeneratedQuiz] = useState<any>(null)
   const [tab, setTab] = useState<'events' | 'grades' | 'quiz'>('events')
+  const [parsing, setParsing] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [whatIfLoading, setWhatIfLoading] = useState(false)
+  const [generating, setGenerating] = useState(false)
 
   const load = () => { if (id) api.get(`/courses/${id}`).then(({ data }) => setCourse(data)) }
   useEffect(() => { load() }, [id])
@@ -28,26 +34,47 @@ export default function CourseDetail() {
 
   const handleParseSyllabus = async () => {
     if (!id) return
-    await api.post(`/courses/${id}/parse-syllabus`)
-    load()
+    setParsing(true)
+    try {
+      await api.post(`/courses/${id}/parse-syllabus`)
+      load()
+    } finally {
+      setParsing(false)
+    }
   }
 
   const loadAnalysis = async () => {
     if (!id) return
-    const { data } = await api.get(`/grades/${id}/analysis`)
-    setAnalysis(data)
+    setAnalyzing(true)
+    try {
+      const { data } = await api.get(`/grades/${id}/analysis`)
+      setAnalysis(data)
+    } finally {
+      setAnalyzing(false)
+    }
   }
 
   const handleWhatIf = async () => {
     if (!id) return
-    const { data } = await api.post(`/grades/${id}/what-if`, { targetGrade: Number(targetGrade) })
-    setWhatIf(data)
+    setWhatIfLoading(true)
+    try {
+      const { data } = await api.post(`/grades/${id}/what-if`, { targetGrade: Number(targetGrade) })
+      setWhatIf(data)
+    } finally {
+      setWhatIfLoading(false)
+    }
   }
 
   const handleGenerateQuiz = async () => {
     if (!id) return
-    const { data } = await api.post('/study/quiz/generate', { courseId: id, topic: quizTopic })
-    setGeneratedQuiz(data)
+    setGenerating(true)
+    try {
+      const language = localStorage.getItem('language') || 'Python'
+      const { data } = await api.post('/study/quiz/generate', { courseId: id, topic: quizTopic, language })
+      setGeneratedQuiz(data)
+    } finally {
+      setGenerating(false)
+    }
   }
 
   if (!course) return <p>Loading...</p>
@@ -62,7 +89,9 @@ export default function CourseDetail() {
         <h3>Syllabus</h3>
         <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={handleUploadSyllabus} />
         {course.rawSyllabusText && (
-          <button onClick={handleParseSyllabus} style={smBtn}>Parse with AI</button>
+          <button onClick={handleParseSyllabus} disabled={parsing} style={{ marginLeft: 8, ...(parsing ? { ...smBtn, opacity: 0.6 } : smBtn) }}>
+            {parsing ? <Spinner size={14} /> : 'Parse with AI'}
+          </button>
         )}
         {course.events.length === 0 && course.gradeCategories.length === 0 && (
           <p style={{ fontSize: 14, color: '#888' }}>Upload a syllabus PDF or image, then click parse.</p>
@@ -90,7 +119,9 @@ export default function CourseDetail() {
       {tab === 'grades' && (
         <div>
           <div style={{ marginBottom: 12 }}>
-            <button onClick={loadAnalysis} style={smBtn}>Calculate Current Grade</button>
+            <button onClick={loadAnalysis} disabled={analyzing} style={analyzing ? { ...smBtn, opacity: 0.6 } : smBtn}>
+              {analyzing ? <Spinner size={14} /> : 'Calculate Current Grade'}
+            </button>
           </div>
           {analysis && (
             <div style={{ marginBottom: 16 }}>
@@ -104,22 +135,30 @@ export default function CourseDetail() {
           )}
 
           <h3>What If</h3>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <input placeholder="Target grade %" value={targetGrade} onChange={(e) => setTargetGrade(e.target.value)} style={{ padding: 8, fontSize: 14 }} />
-            <button onClick={handleWhatIf} style={smBtn}>Calculate</button>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+            <input placeholder="Target grade %" value={targetGrade} onChange={(e) => setTargetGrade(e.target.value)} style={{ padding: 8, fontSize: 14, width: 150 }} />
+            <button onClick={handleWhatIf} disabled={whatIfLoading} style={whatIfLoading ? { ...smBtn, opacity: 0.6 } : smBtn}>
+              {whatIfLoading ? <Spinner size={14} /> : 'Calculate'}
+            </button>
           </div>
           {whatIf && (
             <p>Need {whatIf.neededOnRemaining !== null ? `${whatIf.neededOnRemaining}%` : 'N/A'} on remaining {whatIf.remainingWeight}% to reach {whatIf.targetGrade}%</p>
           )}
+          <div style={{ marginTop: 12 }}>
+            <p style={{ fontSize: 13, color: '#888' }}>Add grades via the API or manually in your database to see them here.</p>
+          </div>
         </div>
       )}
 
       {tab === 'quiz' && (
         <div>
           <h3>Generate Quiz</h3>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
             <input placeholder="Topic (optional)" value={quizTopic} onChange={(e) => setQuizTopic(e.target.value)} style={{ padding: 8, fontSize: 14, flex: 1 }} />
-            <button onClick={handleGenerateQuiz} style={smBtn}>Generate</button>
+            <LanguageSelector />
+            <button onClick={handleGenerateQuiz} disabled={generating} style={generating ? { ...smBtn, opacity: 0.6 } : smBtn}>
+              {generating ? <Spinner size={14} /> : 'Generate'}
+            </button>
           </div>
 
           {generatedQuiz && (
@@ -141,6 +180,6 @@ export default function CourseDetail() {
 }
 
 const eventCard: React.CSSProperties = { border: '1px solid #eee', borderRadius: 6, padding: 12, marginBottom: 8, background: '#fafafa' }
-const smBtn: React.CSSProperties = { padding: '6px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 }
+const smBtn: React.CSSProperties = { padding: '6px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }
 const tabStyle: React.CSSProperties = { padding: '8px 16px', border: '1px solid #ddd', background: '#f5f5f5', borderRadius: 4, cursor: 'pointer' }
 const activeTab: React.CSSProperties = { ...tabStyle, background: '#3b82f6', color: '#fff', borderColor: '#3b82f6' }

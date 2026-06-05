@@ -92,7 +92,7 @@ Content: ${text.substring(0, 5000)}`;
     return parseJSON(result) || { flashcards: [{ id: '1', front: 'Error', back: 'Could not extract' }] };
   }
 
-  static async generateQuiz(text: string, type: string): Promise<any> {
+  static async generateQuiz(text: string, type: string, language?: string): Promise<any> {
     const isExam = type === 'exam';
     const prompt = isExam
       ? `Analyze this practice exam and generate a similar exam with the same style and topics. Include word problems. Return JSON:

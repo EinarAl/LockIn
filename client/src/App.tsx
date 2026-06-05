@@ -6,6 +6,10 @@ import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import NewCourse from './pages/NewCourse'
 import CourseDetail from './pages/CourseDetail'
+import AIChat from './pages/AIChat'
+import MockMidterm from './pages/MockMidterm'
+import MockInterviews from './pages/MockInterviews'
+import Settings from './pages/Settings'
 import Layout from './components/Layout'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -29,6 +33,10 @@ export default function App() {
       <Route path="/" element={<ProtectedRoute><Layout><Dashboard /></Layout></ProtectedRoute>} />
       <Route path="/courses/new" element={<ProtectedRoute><Layout><NewCourse /></Layout></ProtectedRoute>} />
       <Route path="/courses/:id" element={<ProtectedRoute><Layout><CourseDetail /></Layout></ProtectedRoute>} />
+      <Route path="/ai-chat" element={<ProtectedRoute><Layout><AIChat /></Layout></ProtectedRoute>} />
+      <Route path="/mock-midterm" element={<ProtectedRoute><Layout><MockMidterm /></Layout></ProtectedRoute>} />
+      <Route path="/mock-interviews" element={<ProtectedRoute><Layout><MockInterviews /></Layout></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><Layout><Settings /></Layout></ProtectedRoute>} />
     </Routes>
   )
 }
