@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import api from '../api'
+import Calendar from '../components/Calendar'
 import Spinner from '../components/Spinner'
 import LanguageSelector from '../components/LanguageSelector'
 
-interface Course { _id: string; name: string; code: string; term: string; instructor: string; events: any[]; gradeCategories: any[]; rawSyllabusText: string }
+interface Course { _id: string; name: string; code: string; term: string; events: any[]; gradeCategories: any[]; rawSyllabusText: string }
 
 export default function CourseDetail() {
   const { id } = useParams()
@@ -13,12 +14,16 @@ export default function CourseDetail() {
   const [targetGrade, setTargetGrade] = useState('')
   const [whatIf, setWhatIf] = useState<any>(null)
   const [quizTopic, setQuizTopic] = useState('')
+  const [quizFile, setQuizFile] = useState<File | null>(null)
   const [generatedQuiz, setGeneratedQuiz] = useState<any>(null)
   const [tab, setTab] = useState<'events' | 'grades' | 'quiz'>('events')
   const [parsing, setParsing] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [whatIfLoading, setWhatIfLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({})
+  const [quizSubmitted, setQuizSubmitted] = useState(false)
+  const [quizScore, setQuizScore] = useState(0)
 
   const load = () => { if (id) api.get(`/courses/${id}`).then(({ data }) => setCourse(data)) }
   useEffect(() => { load() }, [id])
@@ -68,13 +73,34 @@ export default function CourseDetail() {
   const handleGenerateQuiz = async () => {
     if (!id) return
     setGenerating(true)
+    setQuizSubmitted(false)
+    setQuizAnswers({})
     try {
       const language = localStorage.getItem('language') || 'Python'
-      const { data } = await api.post('/study/quiz/generate', { courseId: id, topic: quizTopic, language })
+      const form = new FormData()
+      if (quizFile) form.append('exampleExam', quizFile)
+      form.append('topic', quizTopic)
+      form.append('courseId', id)
+      form.append('language', language)
+      const { data } = await api.post('/study/quiz/generate', form, {
+        headers: quizFile ? { 'Content-Type': 'multipart/form-data' } : {},
+      })
       setGeneratedQuiz(data)
     } finally {
       setGenerating(false)
     }
+  }
+
+  const handleSubmitQuiz = () => {
+    if (!generatedQuiz) return
+    let correct = 0
+    generatedQuiz.questions.forEach((q: any, i: number) => {
+      if (quizAnswers[i]?.toLowerCase().trim() === q.correctAnswer.toLowerCase().trim()) {
+        correct++
+      }
+    })
+    setQuizScore(correct)
+    setQuizSubmitted(true)
   }
 
   if (!course) return <p>Loading...</p>
@@ -106,13 +132,7 @@ export default function CourseDetail() {
 
       {tab === 'events' && (
         <div>
-          <h3>Events</h3>
-          {course.events.length === 0 && <p>No events yet. Parse your syllabus.</p>}
-          {course.events.map((e, i) => (
-            <div key={i} style={eventCard}>
-              <strong>{e.title}</strong> &middot; {e.date} <span style={{ color: '#888' }}>({e.type})</span>
-            </div>
-          ))}
+          <Calendar events={course.events} courseId={course._id} onEventChange={load} />
         </div>
       )}
 
@@ -145,7 +165,7 @@ export default function CourseDetail() {
             <p>Need {whatIf.neededOnRemaining !== null ? `${whatIf.neededOnRemaining}%` : 'N/A'} on remaining {whatIf.remainingWeight}% to reach {whatIf.targetGrade}%</p>
           )}
           <div style={{ marginTop: 12 }}>
-            <p style={{ fontSize: 13, color: '#888' }}>Add grades via the API or manually in your database to see them here.</p>
+            <p style={{ fontSize: 13, color: '#888' }}>Add grades via the API or parse a syllabus to define grade categories.</p>
           </div>
         </div>
       )}
@@ -153,24 +173,66 @@ export default function CourseDetail() {
       {tab === 'quiz' && (
         <div>
           <h3>Generate Quiz</h3>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
-            <input placeholder="Topic (optional)" value={quizTopic} onChange={(e) => setQuizTopic(e.target.value)} style={{ padding: 8, fontSize: 14, flex: 1 }} />
-            <LanguageSelector />
-            <button onClick={handleGenerateQuiz} disabled={generating} style={generating ? { ...smBtn, opacity: 0.6 } : smBtn}>
-              {generating ? <Spinner size={14} /> : 'Generate'}
+          <div style={{ marginBottom: 16, padding: 16, background: '#fff', border: '1px solid #ddd', borderRadius: 8 }}>
+            <input placeholder="Topic or description of material" value={quizTopic} onChange={(e) => setQuizTopic(e.target.value)} style={{ display: 'block', width: '100%', marginBottom: 8, padding: 10, fontSize: 14, borderRadius: 6, border: '1px solid #d1d5db' }} />
+            <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={(e) => setQuizFile(e.target.files?.[0] || null)} style={{ marginBottom: 8, display: 'block' }} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+              <LanguageSelector />
+              <span style={{ fontSize: 13, color: '#888' }}>(upload material or describe a topic)</span>
+            </div>
+            <button onClick={handleGenerateQuiz} disabled={generating} style={generating ? { ...primaryBtn, opacity: 0.6 } : primaryBtn}>
+              {generating ? <Spinner size={16} /> : 'Generate Quiz'}
             </button>
           </div>
 
           {generatedQuiz && (
-            <div>
-              <h4>{generatedQuiz.title}</h4>
+            <div style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: 16 }}>
+              <h4>{generatedQuiz.title || 'Quiz'}</h4>
               {generatedQuiz.questions?.map((q: any, i: number) => (
-                <div key={i} style={eventCard}>
-                  <p><strong>Q{i + 1}:</strong> {q.prompt}</p>
-                  {q.options?.map((o: string, j: number) => <p key={j} style={{ margin: '2px 0 2px 16px' }}>{o}</p>)}
-                  <p style={{ color: '#888', fontSize: 13 }}>Answer: {q.correctAnswer}</p>
+                <div key={i} style={{ marginBottom: 12, padding: 12, background: '#f8fafc', borderRadius: 6 }}>
+                  <p><strong>Q{i + 1} ({q.type}):</strong> {q.prompt}</p>
+                  {q.options?.map((o: string, j: number) => {
+                    const isSelected = quizAnswers[i] === o
+                    const isCorrect = o.toLowerCase().trim() === q.correctAnswer.toLowerCase().trim()
+                    let bg = '#fff'
+                    if (quizSubmitted) {
+                      if (isCorrect) bg = '#dcfce7'
+                      else if (isSelected) bg = '#fce7e7'
+                    } else if (isSelected) bg = '#dbeafe'
+                    return (
+                      <div
+                        key={j}
+                        onClick={() => {
+                          if (!quizSubmitted) setQuizAnswers(prev => ({ ...prev, [i]: o }))
+                        }}
+                        style={{ padding: '6px 10px', margin: '2px 0', borderRadius: 4, cursor: quizSubmitted ? 'default' : 'pointer', background: bg, border: '1px solid #e2e8f0', fontSize: 14 }}
+                      >{o}</div>
+                    )
+                  })}
+                  {q.type === 'short-answer' && (
+                    <textarea
+                      placeholder="Your answer..."
+                      value={quizAnswers[i] || ''}
+                      onChange={(e) => { if (!quizSubmitted) setQuizAnswers(prev => ({ ...prev, [i]: e.target.value })) }}
+                      style={{ width: '100%', padding: 8, fontSize: 13, borderRadius: 4, border: '1px solid #d1d5db', marginTop: 4, fontFamily: 'inherit' }}
+                      rows={2}
+                      disabled={quizSubmitted}
+                    />
+                  )}
+                  {quizSubmitted && (
+                    <p style={{ fontSize: 13, marginTop: 6, color: q.correctAnswer.toLowerCase().trim() === (quizAnswers[i] || '').toLowerCase().trim() ? '#16a34a' : '#dc2626' }}>
+                      {q.correctAnswer.toLowerCase().trim() === (quizAnswers[i] || '').toLowerCase().trim() ? 'Correct!' : `Incorrect. Answer: ${q.correctAnswer}`}
+                      {q.explanation && <span style={{ color: '#666' }}> - {q.explanation}</span>}
+                    </p>
+                  )}
                 </div>
               ))}
+              {!quizSubmitted && (
+                <button onClick={handleSubmitQuiz} style={primaryBtn}>Submit Answers</button>
+              )}
+              {quizSubmitted && (
+                <p><strong>Score: {quizScore}/{generatedQuiz.questions?.length}</strong></p>
+              )}
             </div>
           )}
         </div>
@@ -181,5 +243,6 @@ export default function CourseDetail() {
 
 const eventCard: React.CSSProperties = { border: '1px solid #eee', borderRadius: 6, padding: 12, marginBottom: 8, background: '#fafafa' }
 const smBtn: React.CSSProperties = { padding: '6px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }
+const primaryBtn: React.CSSProperties = { padding: '10px 20px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 15, display: 'inline-flex', alignItems: 'center', gap: 8 }
 const tabStyle: React.CSSProperties = { padding: '8px 16px', border: '1px solid #ddd', background: '#f5f5f5', borderRadius: 4, cursor: 'pointer' }
 const activeTab: React.CSSProperties = { ...tabStyle, background: '#3b82f6', color: '#fff', borderColor: '#3b82f6' }

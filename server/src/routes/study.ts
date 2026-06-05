@@ -1,10 +1,13 @@
 import { Router, Response } from 'express'
+import multer from 'multer'
 import { authenticate, AuthRequest } from '../middleware/auth'
 import Quiz from '../models/Quiz'
 import Flashcard from '../models/Flashcard'
 import Course from '../models/Course'
 import { AIService } from '../services/ai'
+import { OCRService } from '../services/ocr'
 
+const upload = multer({ dest: 'uploads/' })
 const router = Router()
 
 router.use(authenticate)
@@ -16,19 +19,25 @@ router.get('/quiz/:courseId', async (req: AuthRequest, res: Response) => {
   res.json(quizzes)
 })
 
-router.post('/quiz/generate', async (req: AuthRequest, res: Response) => {
+router.post('/quiz/generate', upload.single('exampleExam'), async (req: AuthRequest, res: Response) => {
   try {
     const { courseId, topic, type, language } = req.body
-    let context = topic || ''
+    let materialText = topic || ''
+
+    if (req.file) {
+      const text = await OCRService.processFile(req.file.path)
+      if (text.trim()) materialText = text + '\n\n' + (materialText || '')
+    }
+    let context = materialText
 
     if (courseId) {
       const course = await Course.findOne({ _id: courseId, user: req.userId })
-      if (course?.rawSyllabusText) {
+      if (course?.rawSyllabusText && !req.file) {
         context = `Course: ${course.name}\nSyllabus: ${course.rawSyllabusText.slice(0, 3000)}`
       }
     }
 
-    const quizData = await AIService.generateQuiz(context, type || 'quiz', language)
+    const quizData = await AIService.generateQuiz(context || 'General topic', type || 'quiz', language)
     const quiz = await Quiz.create({
       user: req.userId,
       course: courseId,

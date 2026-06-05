@@ -90,4 +90,47 @@ router.post('/:id/parse-syllabus', async (req: AuthRequest, res: Response) => {
   }
 })
 
+router.post('/:id/events', async (req: AuthRequest, res: Response) => {
+  try {
+    const course = await Course.findOne({ _id: req.params.id, user: req.userId })
+    if (!course) return res.status(404).json({ error: 'Course not found' })
+    const { date, title, type, color } = req.body
+    ;(course.events as any).push({ date, title, type: type || 'other', color: color || '#3b82f6' })
+    await course.save()
+    res.status(201).json(course.events[course.events.length - 1])
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to add event' })
+  }
+})
+
+router.put('/:id/events/:eventId', async (req: AuthRequest, res: Response) => {
+  try {
+    const course = await Course.findOne({ _id: req.params.id, user: req.userId })
+    if (!course) return res.status(404).json({ error: 'Course not found' })
+    const event = (course.events as any).id(req.params.eventId)
+    if (!event) return res.status(404).json({ error: 'Event not found' })
+    const { title, type, color, date } = req.body
+    if (title !== undefined) event.title = title
+    if (type !== undefined) event.type = type
+    if (color !== undefined) event.color = color
+    if (date !== undefined) event.date = date
+    await course.save()
+    res.json(event)
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update event' })
+  }
+})
+
+router.delete('/:id/events/:eventId', async (req: AuthRequest, res: Response) => {
+  try {
+    const course = await Course.findOne({ _id: req.params.id, user: req.userId })
+    if (!course) return res.status(404).json({ error: 'Course not found' })
+    ;(course.events as any).pull({ _id: req.params.eventId })
+    await course.save()
+    res.json({ message: 'Event deleted' })
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete event' })
+  }
+})
+
 export default router
