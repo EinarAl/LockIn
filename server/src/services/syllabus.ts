@@ -1,4 +1,5 @@
-import { callGroq } from './ai'
+import { getAIService } from './ai'
+const { callAI } = getAIService()
 
 interface ParsedSyllabus {
   events: { date: string; title: string; type: string }[]
@@ -33,7 +34,7 @@ Return JSON ONLY with this exact structure:
 
 Make sure grade category weights sum to 100. Include as many events as you can find.`
 
-  const result = await callGroq('llama-3.3-70b-versatile', [
+  const result = await callAI([
     { role: 'system', content: 'You are a syllabus parser. Return only valid JSON. Use the current year 2026 for all dates.' },
     { role: 'user', content: prompt },
   ])

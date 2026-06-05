@@ -12,5 +12,7 @@ export const config = {
     privateKey: process.env.VAPID_PRIVATE_KEY || '',
   },
   groqApiKey: process.env.GROQ_API_KEY || '',
+  geminiApiKey: process.env.GEMINI_API_KEY || '',
+  aiProvider: (process.env.AI_PROVIDER || 'groq') as 'groq' | 'gemini',
   uploadDir: process.env.UPLOAD_DIR || './uploads',
 };

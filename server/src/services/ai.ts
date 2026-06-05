@@ -1,34 +1,99 @@
 import { config } from '../config';
 
 const GROQ_BASE = 'https://api.groq.com/openai/v1/chat/completions';
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-export async function callGroq(model: string, messages: { role: string; content: string }[]): Promise<string> {
-  if (!config.groqApiKey) {
-    return JSON.stringify({
-      error: 'No API key configured. Set GROQ_API_KEY in .env',
-      fallback: true,
+const FALLBACK_MODELS = [
+  'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant',
+  'meta-llama/llama-4-scout-17b-16e-instruct',
+  'qwen/qwen3-32b',
+]
+
+const MAX_TOKENS: Record<string, number> = {
+  'llama-3.3-70b-versatile': 4096,
+  'llama-3.1-8b-instant': 4096,
+  'meta-llama/llama-4-scout-17b-16e-instruct': 4096,
+  'qwen/qwen3-32b': 4096,
+}
+
+async function callGroq(initialModel: string, messages: { role: string; content: string }[]): Promise<string> {
+  const modelsToTry = [initialModel, ...FALLBACK_MODELS.filter(m => m !== initialModel)]
+
+  for (const model of modelsToTry) {
+    const msgs = messages.map(m => ({
+      ...m,
+      content: m.content.length > 25000 ? m.content.slice(0, 25000) : m.content,
+    }))
+
+    const res = await fetch(GROQ_BASE, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.groqApiKey}`,
+      },
+      body: JSON.stringify({ model, messages: msgs, temperature: 0.7, max_tokens: MAX_TOKENS[model] || 2048 }),
     });
-  }
 
-  const res = await fetch(GROQ_BASE, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.groqApiKey}`,
-    },
-    body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: 4096 }),
-  });
+    if (res.ok) {
+      const data: any = await res.json();
+      return data?.choices?.[0]?.message?.content || '';
+    }
 
-  if (!res.ok) {
     const errText = await res.text();
-    if (res.status === 429) {
-      throw Object.assign(new Error('Rate limit reached. Please wait a moment and try again.'), { statusCode: 429, rateLimited: true });
+    if (res.status === 429 || res.status === 413) {
+      console.warn(`Groq model ${model} limited (${res.status}), trying fallback...`)
+      continue
     }
     throw new Error(`Groq API error (${res.status}): ${errText}`);
   }
 
-  const data: any = await res.json();
-  return data?.choices?.[0]?.message?.content || '';
+  throw Object.assign(new Error('Groq rate limit reached on all models. Try again later or switch to Gemini.'), { statusCode: 429, rateLimited: true });
+}
+
+async function callGemini(messages: { role: string; content: string }[]): Promise<string> {
+  const model = 'gemini-2.0-flash'
+  const url = `${GEMINI_BASE}/${model}:generateContent?key=${config.geminiApiKey}`
+
+  const contents = messages.map(m => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }))
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents,
+      generationConfig: { temperature: 0.7, maxOutputTokens: 4096 },
+    }),
+  })
+
+  if (!res.ok) {
+    const errText = await res.text()
+    if (res.status === 429) {
+      throw Object.assign(new Error('Gemini rate limit reached. Try again later.'), { statusCode: 429, rateLimited: true });
+    }
+    throw new Error(`Gemini API error (${res.status}): ${errText}`)
+  }
+
+  const data: any = await res.json()
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text || ''
+}
+
+async function callAI(messages: { role: string; content: string }[]): Promise<string> {
+  if (config.aiProvider === 'gemini' && config.geminiApiKey) {
+    try {
+      return await callGemini(messages)
+    } catch (err: any) {
+      if (err.rateLimited || !config.groqApiKey) throw err
+      console.warn('Gemini failed, falling back to Groq:', err.message)
+    }
+  }
+  if (config.groqApiKey) {
+    return await callGroq('llama-3.3-70b-versatile', messages)
+  }
+  return JSON.stringify({ error: 'No AI API key configured. Set GROQ_API_KEY or GEMINI_API_KEY in .env', fallback: true })
 }
 
 function parseJSON(text: string): any {
@@ -39,6 +104,10 @@ function parseJSON(text: string): any {
   } catch {
     return null;
   }
+}
+
+export function getAIService() {
+  return { callAI, parseJSON };
 }
 
 export class AIService {
@@ -59,7 +128,7 @@ If unsure, set confidence to "low" and answer to "I'm not confident I can solve 
 }
 If unsure, set confidence to "low" and answer to "I'm not confident I can solve this correctly."`;
 
-    const text = await callGroq('llama-3.3-70b-versatile', [
+    const text = await callAI([
       { role: 'system', content: systemPrompt },
       { role: 'user', content: `Problem: ${prompt}` },
     ]);
@@ -73,7 +142,7 @@ If unsure, set confidence to "low" and answer to "I'm not confident I can solve 
   "flashcards": [{ "id": "1", "front": "question/term", "back": "answer/definition" }]
 }`;
 
-    const text = await callGroq('llama-3.3-70b-versatile', [
+    const text = await callAI([
       { role: 'user', content: prompt },
     ]);
 
@@ -88,7 +157,7 @@ If unsure, set confidence to "low" and answer to "I'm not confident I can solve 
 
 Content: ${text.substring(0, 5000)}`;
 
-    const result = await callGroq('llama-3.3-70b-versatile', [
+    const result = await callAI([
       { role: 'user', content: prompt },
     ]);
 
@@ -99,7 +168,6 @@ Content: ${text.substring(0, 5000)}`;
     const isExam = type === 'exam';
     const prompt = isExam
       ? `You are a professor creating a practice exam. Analyze the uploaded exam below and generate a NEW exam that matches it EXACTLY in:
-
 - Subject matter and topic coverage
 - Difficulty and rigor (university level)
 - Question types and format (multiple choice, true/false, short answer, word problem, diagram-based, etc.)
@@ -109,8 +177,7 @@ Content: ${text.substring(0, 5000)}`;
 IMPORTANT RULES:
 - Keep every question's concept and structure identical, ONLY change the numbers, data values, and variable names.
 - If the original includes diagrams, figures, or equation sheets, mention them in a "diagrams" field and describe what they show.
-- Generate questions at the SAME difficulty level as the original. If it is a university physics/engineering exam, do NOT generate middle school math.
-- Do NOT simplify or water down the content.
+- Generate questions at the SAME difficulty level as the original.
 - Each question must have a "type" field matching the original.
 
 Return ONLY valid JSON:
@@ -140,7 +207,7 @@ ${text.substring(0, 8000)}`
 
 Content: ${text.substring(0, 5000)}`;
 
-    const result = await callGroq('llama-3.3-70b-versatile', [
+    const result = await callAI([
       { role: 'user', content: prompt },
     ]);
 
@@ -176,7 +243,7 @@ Context:
 ${context || 'General software engineering interview'}
 Programming language: ${params.language}`;
 
-    const result = await callGroq('llama-3.3-70b-versatile', [
+    const result = await callAI([
       { role: 'user', content: prompt },
     ]);
 
@@ -222,7 +289,7 @@ Make the problem realistic for a ${params.position || 'software engineering'} in
   "topics": ["Array", "Hash Table"]
 }`;
 
-    const result = await callGroq('llama-3.3-70b-versatile', [
+    const result = await callAI([
       { role: 'user', content: prompt },
     ]);
 
@@ -253,7 +320,7 @@ Evaluate the solution. Return ONLY valid JSON:
   "spaceComplexity": "O(...)"
 }`;
 
-    const result = await callGroq('llama-3.3-70b-versatile', [
+    const result = await callAI([
       { role: 'user', content: prompt },
     ]);
 
@@ -285,7 +352,7 @@ Study material: ${context.substring(0, 3000)}`;
 }`;
     }
 
-    const result = await callGroq('llama-3.3-70b-versatile', [
+    const result = await callAI([
       { role: 'user', content: prompt },
     ]);
 
@@ -314,7 +381,7 @@ Study material: ${context.substring(0, 3000)}`;
 }`;
     }
 
-    const result = await callGroq('llama-3.3-70b-versatile', [
+    const result = await callAI([
       { role: 'user', content: prompt },
     ]);
 
