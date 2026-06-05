@@ -2,7 +2,7 @@ import { config } from '../config';
 
 const GROQ_BASE = 'https://api.groq.com/openai/v1/chat/completions';
 
-async function callGroq(model: string, messages: { role: string; content: string }[]): Promise<string> {
+export async function callGroq(model: string, messages: { role: string; content: string }[]): Promise<string> {
   if (!config.groqApiKey) {
     return JSON.stringify({
       error: 'No API key configured. Set GROQ_API_KEY in .env',
